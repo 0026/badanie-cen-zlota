@@ -1,0 +1,486 @@
+---
+title: "Zaawansowana Eksploracja Danych - Projekt"
+author: "Tomasz Chudziak"
+date: "14/11/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false
+    number_sections: true
+    theme: united
+    highlight: espresso
+    downcute_theme: "chaos"
+    css: "my.css"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+Wykorzystane biblioteki:
+
+* readxl - wczytuje plik xlsx, 
+* dplyr, tidyr, lubridate, tibble, zoo - manipuluje danymi,
+* ggplot2, lattice, plotly, rmarkdown - wizualizacja danych,
+* DT - tworzy estetyczne tabele,
+* ggcorrplot - wizualizuje graficznie korelacje,
+
+```{r wczytanie_niezbednych_bibliotek}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(DT)
+library(lattice)
+library(plotly)
+library(lubridate)
+library(tibble)
+library(rmarkdown)
+library(zoo)
+library(ggcorrplot)
+
+```
+
+```{r kod_pomocniczy, echo=FALSE, results='hide'}
+setwd("D:\\studia\\ZED\\projekt\\Data pack\\")
+
+prettyTable <- function(table_df, round_digits=2) {
+    DT::datatable(table_df, style="bootstrap", filter = "top", rownames = FALSE, extensions = "Buttons", options = list(dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel', 'pdf', 'print'))) %>% formatRound(names(dplyr::select_if(table_df, is.numeric)), round_digits)
+}
+
+
+translate <- read_excel("World_Development_Indicators.xlsx", 
+                        sheet=2, 
+                        col_types = "text"
+                        )
+
+translateIndicator<-function(code){
+  translate%>%filter(Code==code)%>%select("Indicator Name")%>%unlist(., use.names=FALSE)
+}
+```
+
+
+# Dane
+
+## Podsumowanie danych
+
+ Poniższy blok kodu wczytuje dane:
+
+* **goldPrice** - ceny złota,
+* **currencyExchangeRates** - kursy wymiany walut,
+* **spComposite** - indeks giełdowy amerykańskich akcji firmy Standard & Poor's,
+* **worldDevelopmentIndicators** - światowe wskaźniki rozwoju,
+
+```{r wczytanie danych}
+setwd("D:\\studia\\ZED\\projekt\\Data pack\\")
+goldPrice <- as_tibble(read.csv(file = "Gold prices.csv"))
+currencyExchangeRates <-  as_tibble(read.csv(file = "CurrencyExchangeRates.csv"))
+spComposite <-  as_tibble(read.csv(file = "S&P Composite.csv"))
+worldDevelopmentIndicators <- as_tibble(read_excel("World_Development_Indicators.xlsx"))
+```
+
+Poniższy blok kodu wczytuje dane odnośnie bitcoina:
+
+* Bitcoin
+  + BCHAIN_metadata 
+  + BCHAIN-DIFF
+  + BCHAIN-HRATE
+  + BCHAIN-MKPRU
+  + BCHAIN-TRVOU
+  
+```{r wczytanie_danych_o_bitcoinie}
+setwd("D:\\studia\\ZED\\projekt\\Data pack\\Bitcoin")
+bchain_metadata  <- read.csv(file = "BCHAIN_metadata.csv")
+bchain_diff <- read.csv(file = "BCHAIN-DIFF.csv")
+bchain_hrate <- read.csv(file = "BCHAIN-HRATE.csv")
+bchain_mkpru <- read.csv(file = "BCHAIN-MKPRU.csv")
+bchain_trvou <- read.csv(file = "BCHAIN-TRVOU.csv")
+```
+
+
+
+## Ceny złota
+```{r ceny_zlota_podsumowanie}
+summary(goldPrice)
+
+```
+Czyszczenie danych
+Na tym etapie uznałem że będę używał średnią cenę złota w danym dniu, jeżeli ceny nie będzie z rana lub wieczora będzie brana ta która jest.
+```{r ceny_zlota_standaryzacja}
+gp<- goldPrice %>% 
+    mutate(Date=as.Date(Date,format="%Y-%m-%d")) %>% 
+    mutate(usd=
+        ifelse(is.na(USD..AM.), USD..PM.,
+            ifelse(is.na(USD..PM.), USD..AM.,
+                round((USD..AM.+USD..PM.)/2.0,digits=2)
+            )
+        ),
+        gbp=
+        ifelse(is.na(GBP..AM.), GBP..PM.,
+            ifelse(is.na(GBP..PM.), GBP..AM.,
+                round((GBP..AM.+GBP..PM.)/2.0,digits=2)
+            )
+        ),
+        euro=
+        ifelse(is.na(EURO..AM.), EURO..PM.,
+            ifelse(is.na(EURO..PM.), EURO..AM.,
+                round((EURO..AM.+EURO..PM.)/2.0,digits=2)
+            )
+        )
+    ) %>% 
+    rename(g_date=Date, g_usd=usd, g_gbp=gbp,g_euro=euro) %>%
+    select(g_date,g_usd,g_gbp,g_euro)
+
+summary(gp)
+
+ggplot(data=gp, aes(g_date)) + 
+  geom_line(aes(y = g_usd, colour = "g_usd")) + 
+  geom_line(aes(y = g_euro, colour = "g_euro")) + 
+  geom_line(aes(y = g_gbp, colour = "g_gbp"))
+```
+
+## Kursy walut
+
+```{r kursy_wymiany_walut_podsumowanie}
+colnames(currencyExchangeRates)
+nrow(currencyExchangeRates)
+summary(currencyExchangeRates)
+```
+
+```{r kursy_walut_rozplaszczenie_danych}
+cer <- currencyExchangeRates %>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  gather(key="currency", value="value", 2:52) %>%
+  filter(!is.na(value))
+
+summary(cer)
+
+cerTmp<-cer %>% filter(currency %in% c("Euro","Polish.Zloty","Japanese.Yen","U.S..Dollar"))
+ggplot(data=cerTmp,aes(x=Date, y=value))+geom_line()+ facet_wrap(~currency, scales = "free", ncol = 2)
+```
+
+## Indeks giełdowy Standard & Poor's
+```{r indeks_gieldowy}
+
+spComposite <- spComposite %>%
+  mutate(Year=as.Date(Year,format="%Y-%m-%d")) %>%
+  arrange(Year)
+
+summary(spComposite)
+colnames(spComposite)
+head(spComposite)
+
+spComposite <- spComposite %>% fill(names(.),.direction="updown")
+
+summary(spComposite)
+
+spComposite <- spComposite%>%
+  mutate(month = format(Year, "%m"), year = format(Year, "%Y"))%>%
+  select(-c('Year'))
+
+head(spComposite)
+
+ggplot(data=spComposite, aes(x=make_date(year=year, month=month),y=Earnings)) + geom_line() 
+ggplot(data=spComposite, aes(x=make_date(year=year, month=month),y=CPI)) + geom_line()
+
+tmpdf <- spComposite %>% select(-c(month,year))
+corr <- round(cor(tmpdf), 1)
+ggcorrplot(corr, type = "lower", lab = TRUE)
+
+```
+
+## Światowe wskaźniki rozwoju
+
+```{r swiatowe_wskazniki_rozwoju}
+ colnames(worldDevelopmentIndicators)
+
+wdi <- gather(worldDevelopmentIndicators,key="year", value="developmentIndicators", 5:55) %>%
+  mutate(year = substr(year,1,4)) %>%
+  filter(developmentIndicators!="..") %>%
+  mutate_at("developmentIndicators", as.numeric) %>%
+  mutate_at("year", as.numeric) %>%
+  filter(year>2000) %>%
+  rename(countryCode="Country Code") %>%
+  rename(indicator="Series Code") %>%
+  rename(seriesName="Series Name")
+  #filter(indicator %in% c("SP.URB.TOTL.IN.ZS","SH.STA.SUIC.P5","CM.MKT.TRAD.CD","NY.GDP.MKTP.CD"))
+  
+wdi_tmp <-wdi %>% filter(countryCode %in% c("DEU","USA","GBR","JPN","RUS","IDN","POL","WLD","CHN"))
+
+summary(wdi_tmp)
+
+z <- translate%>%select("Indicator Name")
+paged_table(z, options = list(cols.print = 10,cols.min.print=1))
+
+
+gdpchart <- wdi_tmp %>% filter(indicator =="NY.GDP.MKTP.CD" & countryCode != "WLD")
+xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
+       grid = TRUE, main="GDP (current US$)")
+
+gdpchart <- wdi_tmp %>% filter(indicator =="SP.URB.TOTL.IN.ZS" & countryCode != "WLD")
+xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
+       grid = TRUE, main="Urban population (% of total population)")
+
+gdpchart <- wdi_tmp %>% filter(indicator =="SH.STA.SUIC.P5" & countryCode != "WLD")
+xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
+       grid = TRUE, main="Suicide mortality rate (per 100,000 population)")
+
+gdpchart <- wdi_tmp %>% filter(indicator =="CM.MKT.TRAD.CD" & countryCode != "WLD")
+xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
+       grid = TRUE, main="Stocks traded, total value (current US$)")
+
+```
+
+## Bitcoin
+```{r bitcoin_wiadomosci}
+bchain_metadata %>%
+  filter(code %in% c("DIFF", "HRATE", "MKPRU","TRVOU")) %>% 
+  select(code, name)
+
+
+summary(bchain_mkpru)
+bchain_mkpru<- bchain_mkpru %>% 
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Value!=0)
+gg <- ggplot(data=bchain_mkpru, aes(x=Date,y=Value)) + geom_line() 
+
+ggplotly(gg)
+```
+
+# Badanie powiązań
+
+## Ceny złota a cena bitcoina
+
+```{r ceny_zlota_a_ceny_bitcona_interaktywny_wykres}
+df <- bchain_mkpru %>% left_join(gp,c("Date"="g_date")) %>%
+  select(Date, Value, g_usd)%>%
+  filter(!is.na(Value) & !is.na(g_usd))
+
+df2 <- df%>%
+  mutate(month = format(Date, "%m"), year = format(Date, "%Y")) %>%
+  group_by(month, year) %>%
+  summarise_at(c("g_usd","Value"),mean, na.rm = TRUE) %>%
+  rename(avgGold=g_usd,avgBit=Value)%>%
+  filter(avgGold!=0 & avgBit!=0)%>%
+  mutate(date = make_date(year=year, month=month))
+  
+gg <- ggplot(df2, aes(x=avgGold, y=avgBit,frame=year))+ geom_point()
+ggplotly(gg)
+```
+
+```{r ceny_zlota_a_ceny_bitcona}
+coeff <- 40
+goldColor <-"green"
+bitcoinColor<-"red"
+
+ggplot(df, aes(x=Date))+
+  geom_line(aes(y=g_usd), color=goldColor) +
+  geom_line(aes(y=Value/coeff), color=bitcoinColor) +
+  scale_y_continuous(
+    name = "cena złota",
+    sec.axis = sec_axis( trans=~.*coeff,name="cena bitcoina")
+  ) +
+  theme(
+    axis.title.y = element_text(color = goldColor, size=13),
+    axis.title.y.right = element_text(color = bitcoinColor, size=13)
+  )+
+  xlim(as.Date("2017-01-01",format="%Y-%m-%d"),as.Date("2021-09-29",format="%Y-%m-%d"))
+```
+
+
+```{r ceny_zlota_bitcona_korelacja}
+df1 <- gp %>% select(g_usd,g_date) %>% rename(Date=g_date)
+df2 <- df1%>% inner_join(bchain_mkpru)%>%
+  group_by(year =year(Date)) %>%
+  summarize(corel=cor(g_usd,Value))
+
+ggplot(data=df2, aes(x=as.character(year), y=corel)) +
+  xlab("year")+
+  ylab("correlation")+
+  geom_bar(stat="identity", width=0.2)
+
+```
+
+## Cena złota a wskaźniki światowe
+```{r ceny_zlota_a_swiatowe_wskazniki}
+gpTmp <-gp %>% 
+  mutate(year = format(g_date, "%Y")) %>%
+  group_by(year) %>%
+  summarise_at(vars(g_usd),list(avg = mean))%>%
+  select(year,avg)%>%
+  mutate_at("year", as.numeric)
+
+wdiTmp <- wdi %>%
+  filter(countryCode =="WLD")%>%
+  select(year,developmentIndicators, seriesName ,indicator)
+
+factor<- unlist(unique(wdiTmp[c("indicator")]))
+
+experiment <- data.frame(indicator=c(),corelation=c())
+
+for(i in factor){
+  wdiInd <- wdiTmp%>% filter(indicator ==i) %>%
+   inner_join(gpTmp,by="year")
+  
+  corelation <- cor(wdiInd[c("developmentIndicators")],wdiInd[c("avg")])
+  
+  tmp<-data.frame(i,corelation)
+  colnames(tmp)<-c("indicator","corelation")
+  rownames(tmp) <- NULL
+  experiment<- rbind(experiment,tmp)
+
+}
+```
+
+                  
+<!-- GDP (current US$) https://jii.pm-research.com/content/3/1/83/tab-pdf-disaabled -->
+
+```{r wskazniki_zloto_dodatnia_korelacja}
+result1_experiment <- experiment %>% filter(corelation>0.9)
+result1_experiment$description<-mapply(translateIndicator, result1_experiment$indicator)
+prettyTable(result1_experiment %>% select(description, corelation))
+```
+Powyższa tabela prezentuje `r count(result1_experiment)` różnych wskaźników, które mają wysoki (powyżej 0.9) współczynnik korelacji z ceną złota.
+
+```{r wskazniki_zloto_ujemna_korelacja}
+result2_experiment <- experiment %>% filter(corelation< (-0.9))
+result2_experiment$description<-mapply(translateIndicator, result2_experiment$indicator)
+prettyTable(result2_experiment %>% select(description, corelation))
+```
+Powyższa tabela prezentuje `r count(result2_experiment)` różnych wskaźników, które mają wysoki (poniżej -0.9) współczynnik korelacji z ceną złota.
+
+
+## Ceny złota a ceny akcji 
+
+```{r ceny_zlota_a_ceny_akcji}
+df1 <- gp %>% 
+  select(g_date,g_usd) %>% 
+  mutate(month = format(g_date, "%m"), year = format(g_date, "%Y"))%>% 
+  group_by(month, year) %>%
+  mutate(g_usd = na.aggregate(g_usd, FUN = mean,na.rm=TRUE))%>%
+  mutate(Year = make_date(month=month,year=year))%>%
+  select(Year,g_usd)
+
+#head(df1)
+#colnames(df1)
+df2 <- spComposite %>%
+  #select(month,year,Real.Price)%>% 
+  mutate(Year = make_date(month=month,year=year))
+
+df3 <- df2 %>%
+  inner_join(df1)%>%
+  mutate(month = format(Year, "%m"), year = format(Year, "%Y"))
+
+coeff <- 1.0
+goldColor <-"green"
+actionsPrice<-"red"
+
+ggplot(df3, aes(x=Year))+
+  geom_line(aes(y=g_usd), color=goldColor) +
+  geom_line(aes(y=Real.Price/coeff), color=actionsPrice) +
+  scale_y_continuous(
+    name = "cena złota",
+    sec.axis = sec_axis( trans=~.*coeff,name="ceny akcji")
+  ) +
+  theme(
+    axis.title.y = element_text(color = goldColor, size=13),
+    axis.title.y.right = element_text(color = actionsPrice, size=13)
+  )
+
+x<-cor(x=df3$g_usd, y=df3[!names(df3) %in% c("Year","g_usd","month","year")], use = "complete.obs" )
+x <- as.data.frame(t(x))%>% rename(corelation=V1) %>% arrange(desc(corelation))
+
+x<-rownames_to_column(x, "NAME")
+prettyTable(x)
+```
+
+## Cena bitcoina oraz akcje spółki
+
+```{r ceny_bitcoina}
+df1 <- bchain_mkpru %>%
+  mutate(month = format(Date, "%m"), year = format(Date, "%Y"))%>%
+  group_by(month, year) %>%
+  mutate(Value = na.aggregate(Value, FUN = mean,na.rm=TRUE))%>%
+  mutate(Year = make_date(month=month,year=year))%>%
+  select(Year,Value)%>%select(-c("month","year"))
+  
+df2 <- spComposite %>% mutate(Year = make_date(month=month,year=year))%>%select(-c("month","year"))
+
+df3 <- df2 %>% inner_join(df1)%>%select(-c("month","year"))
+
+x <- cor(x=df3$Value, y=df3[!names(df3) %in% c("Year","Value")], use = "complete.obs" )
+x <- as.data.frame(t(x))%>% rename(corelation=V1) %>% arrange(desc(corelation))
+ 
+x<-rownames_to_column(x, "NAME")
+prettyTable(x)
+```
+
+## Cena bitcoina oraz inne waluty
+
+```{r bitcoin_vs_inne_waluty}
+
+bp <- bchain_mkpru
+currency <- unlist(unique(cer[c("currency")]))
+
+experiment <- data.frame(indicator=c(),corelation=c())
+
+for(i in currency){
+  tmp <- cer%>%filter(currency==i)%>%
+   inner_join(bp)%>%drop_na(value,Value) 
+  
+  corelation <- cor(tmp[c("value")],tmp[c("Value")])
+  
+  tmp<-data.frame(i,corelation)
+  colnames(tmp)<-c("currency","corelation")
+  rownames(tmp) <- NULL
+  experiment<- rbind(experiment,tmp)
+}
+
+e<-experiment %>% arrange(desc(corelation))
+prettyTable(e)
+```
+
+## Cena bitcoina a wskaźniki światowe
+```{r bitcoin_wskazniki}
+bp <- bchain_mkpru
+
+df2 <- bchain_mkpru%>%
+  mutate(year = format(Date, "%Y")) %>%
+  group_by(year) %>%
+  summarise(avgBit= mean(Value)) %>%
+  transform(year = as.numeric(year))
+
+wdiTmp <- wdi %>%
+  filter(countryCode =="WLD")%>%
+  select(year,developmentIndicators, seriesName ,indicator)
+
+
+factor<- unlist(unique(wdiTmp[c("indicator")]))
+experiment <- data.frame(indicator=c(),corelation=c())
+
+for(i in factor){
+  wdiInd <- wdiTmp%>% filter(indicator ==i) %>%
+   inner_join(df2,by="year")
+
+  corelation <- cor(wdiInd[c("developmentIndicators")],wdiInd[c("avgBit")])
+  tmp<-data.frame(i,corelation)
+  colnames(tmp)<-c("indicator","corelation")
+  rownames(tmp) <- NULL
+  experiment<- rbind(experiment,tmp)
+}
+
+result1_experiment <- experiment %>% filter(corelation>0.9)
+result1_experiment$description<-mapply(translateIndicator, result1_experiment$indicator)
+prettyTable(result1_experiment %>% select(description, corelation))
+```
+
+
+
+
+
+
+
