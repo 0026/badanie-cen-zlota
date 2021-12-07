@@ -20,7 +20,28 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
+# Wstęp
+
+Poniższy raport przedstawia proces tworzenia modelu służącego do przewidywania cen złota. W tym celu wykorzystane zostało pięć zbiorów danych:
+
+* cen złota w latach 1968-2021,
+* kursy walut w latach 1995-2018,
+* miesięcznyne wyniki S&P Composite w latach 1871-2021,
+* światowe wskaźniki rozwoju w latach 1970-2020,
+* ceny bitcoina w latach 2010-2021.
+
+Głównym celem było stworzenie regresora, który przewidywałby ceny złota na podstawie danych z powyższych zbiorów. Do seleckji atrybutów wykorzystana została korelacja Pearsona. Ze zbioru kursu walut została wykorzystana historia kursu dolara australijskiego oraz dolara brunejskiego. Ze zbioru miesięcznych wyników S&P Composite wskaźnik CPI, wartość dywidend oraz prawdziwe zarobki. Ze zbioru wskaźników rozwoju światowy wskaźnik PKB.
+
+Ostatecznie udało się stworzyć regresor o podanych wynikach:  
+
+* RMSE 26.3441912
+* MAE 10.9177527
+* Rsquared 0.9969315
+   
+Po badaniu istotności wykorzystanych atrybutów okazało się, że najmniejszy wpływ miał światowy wskaźnik PKB, może być to spowodowane tym, że celem zadania było obliczenie wartości złota w konkretnym dniu, natomiast wskaźnik ten był liczony dla całego roku.
+
 # Biblioteki
+
 Wykorzystane biblioteki:
 
 * readxl - wczytuje plik xlsx, 
@@ -30,7 +51,7 @@ Wykorzystane biblioteki:
 * ggcorrplot - wizualizuje graficznie korelacje,
 * caret - tworzenie modelu predykcji
 
-```{r wczytanie_niezbednych_bibliotek}
+```{r wczytanie_niezbednych_bibliotek, message=FALSE, warning=FALSE}
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -149,6 +170,7 @@ Poniżej znajduje się krótkie podsumowanie wczytanych kursów walut.
 
 ```{r kursy_wymiany_walut_podsumowanie}
 colnames(currencyExchangeRates)
+currencyExchangeRates<-currencyExchangeRates%>% mutate(Date=as.Date(Date,format="%Y-%m-%d"))
 nrow(currencyExchangeRates)
 summary(currencyExchangeRates)
 ```
@@ -157,7 +179,6 @@ Poniższa komórka odpowiedzialna jest za rozpłaszenie danych w celu ułatwieni
 
 ```{r kursy_walut_rozplaszczenie_danych}
 cer <- currencyExchangeRates %>%
-  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
   gather(key="currency", value="value", 2:52) %>%
   filter(!is.na(value))
 
@@ -577,9 +598,10 @@ all_together <- all_ %>% select(-c(Date))
 Sumarycznie powstało `r count(all_)` rekordów.
 
 ## Tworzenie modelu
-Jako model decyzyny wykorzystano drzewo warunkowego wnioskowania.
+Jako model decyzyny wykorzystano Cubist.
 
-```{r predykcja_cen}
+```{r predykcja_cen, cache=TRUE}
+
 set.seed(9)
 
 inTraining <- 
@@ -592,14 +614,13 @@ training <- all_together[ inTraining,]
 testing  <- all_together[-inTraining,]
 
 
-fitControl <- trainControl(method = "repeatedcv",
-                        number = 10,
-                        repeats = 10)
+grid <- expand.grid(committees = c(1, 10, 50, 100), neighbors = c(0, 1, 5, 9))
 
 model <- train(g_usd ~ .,
                data = training,
-               method = "ctree",  # ctree>lm
-               trControl = fitControl)  
+               method = "cubist",  # ctree>lm
+               trControl = trainControl(method = "cv"),
+               tuneGrid = grid)
 
 model
 ```
@@ -615,5 +636,12 @@ tmp$pred<-predictions
 tmp<-tmp%>%select(g_usd,pred)
 head(tmp)
 ```
-Powyższy fragment kodu przedstawia faktyczne wartości oraz przykładowe predykcje. 
+Powyższy fragment przedstawia faktyczne wartości oraz przykładowe predykcje.
+
+```{r analiza_waznosci_atrybutow}
+gbmImp <- varImp(model, scale = FALSE)
+plot(gbmImp)
+```
+
+Powyższy wykres przedstawia wagę poszczególnych atrybutów. Okazuje się, że w najmniejszym stopniu do predykcji przyczynił a się wartość światowego PKB, a w największym wartość Divident ze zbioru miesięcznych wyników S&P Composite.
 
