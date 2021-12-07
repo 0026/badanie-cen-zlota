@@ -162,13 +162,10 @@ cer <- currencyExchangeRates %>%
   filter(!is.na(value))
 
 summary(cer)
-
-cerTmp<-cer %>% filter(currency %in% c("Euro","Polish.Zloty","Japanese.Yen","U.S..Dollar"))
-ggplot(data=cerTmp,aes(x=Date, y=value))+geom_line()+ facet_wrap(~currency, scales = "free", ncol = 2)
 ```
 Prezentacja wybranych wartości
 
-## Indeks giełdowy Standard & Poor's
+## Indeks giełdowy S&P
 
 Poniższy kod prezentuje podsumowanie surowych danych. Można zauważyć, że jest w nich niewielka ilość brakujących wartości. W związku, z czym uzupełniono je danymi z wartościami z pomiaru poprzedniego dnia w przypadku i ich braku z dnia następnego. Nie usuwano wierszy, ponieważ brakujących wartości nie było dużo, a najbliższa wartość może oddawać najbardziej zbliżony stan.
 
@@ -191,13 +188,6 @@ spComposite <- spComposite%>%
   select(-c('Year'))
 
 head(spComposite)
-
-ggplot(data=spComposite, aes(x=make_date(year=year, month=month),y=Earnings)) + geom_line() 
-ggplot(data=spComposite, aes(x=make_date(year=year, month=month),y=CPI)) + geom_line()
-
-tmpdf <- spComposite %>% select(-c(month,year))
-corr <- round(cor(tmpdf), 1)
-ggcorrplot(corr, type = "lower", lab = TRUE)
 ```
 
 ## Światowe wskaźniki rozwoju
@@ -223,24 +213,6 @@ summary(wdi_tmp)
 
 z <- translate%>%select("Indicator Name")
 paged_table(z, options = list(cols.print = 10,cols.min.print=1))
-
-
-gdpchart <- wdi_tmp %>% filter(indicator =="NY.GDP.MKTP.CD" & countryCode != "WLD")
-xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
-       grid = TRUE, main="GDP (current US$)")
-
-gdpchart <- wdi_tmp %>% filter(indicator =="SP.URB.TOTL.IN.ZS" & countryCode != "WLD")
-xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
-       grid = TRUE, main="Urban population (% of total population)")
-
-gdpchart <- wdi_tmp %>% filter(indicator =="SH.STA.SUIC.P5" & countryCode != "WLD")
-xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
-       grid = TRUE, main="Suicide mortality rate (per 100,000 population)")
-
-gdpchart <- wdi_tmp %>% filter(indicator =="CM.MKT.TRAD.CD" & countryCode != "WLD")
-xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2), 
-       grid = TRUE, main="Stocks traded, total value (current US$)")
-
 ```
 
 ## Bitcoin
@@ -511,7 +483,7 @@ prettyTable(result3_experiment %>% select(description, corelation))
 ```
 # Przewidywanie cen
 
-## Wybór atrybutów
+## Wybór i wizualizacja atrybutów
 
 W tej części skupiono się na przewidywaniu cen złota, ponieważ wartości tego zbiór posiadały większą korelację ze zbiorem kursów walut w porównaniu do cen kryptowaluty. W tym celu wykorzystano poniższe 
 
@@ -528,56 +500,84 @@ W tej części skupiono się na przewidywaniu cen złota, ponieważ wartości te
 wskaźniki światowe: GDP (current US$)
   
 ```{r wizualizacja_wybranych_atrybutow_GPD}
-# wdi_tmp <-wdi %>% filter(countryCode %in% c("WLD"))
-# 
-# gdpchart <- wdi_tmp %>% filter(indicator =="NY.GDP.MKTP.CD" & countryCode != "WLD")
-# 
-# xyplot(developmentIndicators ~ year | countryCode, data = gdpchart,layout=c(4,2),
-#        grid = TRUE, main="GDP (current US$)")
-# 
-# 
-# gg <- ggplot(data=bchain_mkpru, aes(x=Date,y=Value)) + geom_line() 
-# ggplotly(gg)
-```
-
-```{r predykcja_cen_zlota_przygotowanie_danych}
-df_gold <- gp %>%
-  select(g_date,g_usd) %>% rename(Date=g_date)
-
-df_stonks <- spComposite %>% 
-  select(year, month, Dividend, CPI, Real.Earnings)%>%
-  mutate(year=as.integer(year), month=as.integer(month))
-
-prettyTable(result1_experiment) #NY.GDP.MKTP.CD
-
-
 df_wld <- wdi %>%
   filter(countryCode=="WLD" & indicator=="NY.GDP.MKTP.CD") %>%
   rename(GPDpc=developmentIndicators)%>%
   select(GPDpc, year)
 
+gg <- ggplot(data=df_wld, aes(x=year,y=GPDpc)) + 
+  geom_line()+
+  ggtitle("GPD")
+ggplotly(gg)
+```
 
+Poniższy macierz przedstawia korelację wszystkich dostępnych wartości ze zbioru indeksów giełdowych. W celu uniknięcia wykorzystywania nadmiarowej ilości danych nie wykorzystywano atrybutów, które w poniższej macierzy na przecięciu mają korelację równą 1. W związku, z czym wykorzystano tylko: Dividend, CPI oraz Real.Earnings.
+
+```{r wizualizacja_wybranych_atrybutow_gielda_korelacja}
+tmpdf <- spComposite %>% select(-c(month,year))
+corr <- round(cor(tmpdf), 1)
+ggcorrplot(corr, type = "lower", lab = TRUE)
+```
+
+Wizualizacja wybranych atrybutów indeksów giełdowych.
+
+```{r wizualizacja_wybranych_atrybutow_gielda}
+df_stonks <- spComposite %>% 
+  select(year, month, Dividend, CPI, Real.Earnings)%>%
+  mutate(year=as.integer(year), month=as.integer(month))
+
+gg <- ggplot(data=df_stonks, aes(x=year,y=Dividend)) + 
+  geom_line()+
+  ggtitle("Dividend")
+ggplotly(gg)
+  
+gg <- ggplot(data=df_stonks, aes(x=year,y=CPI)) + 
+  geom_line()+
+  ggtitle("CPI")
+ggplotly(gg)
+  
+gg <- ggplot(data=df_stonks, aes(x=year,y=Real.Earnings)) + 
+  geom_line()+
+  ggtitle("Real.Earnings")
+ggplotly(gg)
+
+```
+Wizualizacja dwóch wybranych walut, które mają wysoki wskaźnik korelacji.
+
+```{r wizualizacja_wybranych_atrybutow_waluty}
 df_cur_Australian.Dollar <- cer %>% filter(currency %in% c("Australian.Dollar"))%>%
   rename(Australian.Dollar=value) %>% select(Date, Australian.Dollar)
 df_cur_Brunei.Dollar <- cer %>% filter(currency %in% c("Brunei.Dollar"))%>%
   rename(Brunei.Dollar=value) %>% select(Date, Brunei.Dollar)
 df_cur <- merge(df_cur_Australian.Dollar, df_cur_Brunei.Dollar, by="Date")
 
+gg <- ggplot(data=df_cur, aes(Date)) + 
+  geom_line(aes(y = Brunei.Dollar, colour = "Brunei.Dollar"))+
+  geom_line(aes(y = Australian.Dollar, colour = "Australian.Dollar"))+
+  ggtitle("Waluty")+
+  ylab("Value")
+ggplotly(gg)
+```
+
+W celu uzyskania tylko rekordów, które mają wszystkie dane zdecydowano się na łączenia typu inner join. Wiąże się to z wybraniem danych z lat 1998-2018, ponieważ właśnie z tych lat posiadamy dane odnośnie walut. 
+
+```{r predykcja_cen_zlota_przygotowanie_danych}
+df_gold <- gp %>%
+  select(g_date,g_usd) %>% rename(Date=g_date)
 
 all_ <- df_gold %>% inner_join((df_cur)) %>%
   mutate(month =as.integer(format(Date, "%m")), year =as.integer( format(Date, "%Y")))%>%
   inner_join(df_stonks, by = c("year" = "year", "month" = "month"))%>%
   inner_join(df_wld, by=c("year"="year")) %>%select(-c(year, month))
-
-
 summary(all_)
-count(all_)
 
 all_together <- all_ %>% select(-c(Date))
 
 ```
+Sumarycznie powstało `r count(all_)` rekordów.
 
 ## Tworzenie modelu
+Jako model decyzyny wykorzystano drzewo warunkowego wnioskowania.
 
 ```{r predykcja_cen}
 set.seed(9)
@@ -615,3 +615,5 @@ tmp$pred<-predictions
 tmp<-tmp%>%select(g_usd,pred)
 head(tmp)
 ```
+Powyższy fragment kodu przedstawia faktyczne wartości oraz przykładowe predykcje. 
+
