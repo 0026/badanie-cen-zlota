@@ -42,6 +42,7 @@ library(tibble)
 library(rmarkdown)
 library(zoo)
 library(ggcorrplot)
+library(caret)
 
 ```
 
@@ -203,7 +204,7 @@ wdi <- gather(worldDevelopmentIndicators,key="year", value="developmentIndicator
   filter(developmentIndicators!="..") %>%
   mutate_at("developmentIndicators", as.numeric) %>%
   mutate_at("year", as.numeric) %>%
-  filter(year>2000) %>%
+  #filter(year>2000) %>%
   rename(countryCode="Country Code") %>%
   rename(indicator="Series Code") %>%
   rename(seriesName="Series Name")
@@ -303,6 +304,29 @@ ggplot(data=df2, aes(x=as.character(year), y=corel)) +
   ylab("correlation")+
   geom_bar(stat="identity", width=0.2)
 
+```
+
+## Cena złota a waluty światowe
+```{r}
+gp_tmp <- gp %>% select(g_date, g_usd) %>% rename(Date=g_date, Value=g_usd)
+currency <- unlist(unique(cer[c("currency")]))
+
+experiment <- data.frame(indicator=c(),corelation=c())
+
+for(i in currency){
+  tmp <- cer%>%filter(currency==i)%>%
+   inner_join(gp_tmp)%>%drop_na(value,Value) 
+  
+  corelation <- cor(tmp[c("value")],tmp[c("Value")])
+  
+  tmp<-data.frame(i,corelation)
+  colnames(tmp)<-c("currency","corelation")
+  rownames(tmp) <- NULL
+  experiment<- rbind(experiment,tmp)
+}
+
+e<-experiment %>% arrange(desc(corelation))
+prettyTable(e)
 ```
 
 ## Cena złota a wskaźniki światowe
@@ -473,14 +497,82 @@ for(i in factor){
   experiment<- rbind(experiment,tmp)
 }
 
-result1_experiment <- experiment %>% filter(corelation>0.9)
-result1_experiment$description<-mapply(translateIndicator, result1_experiment$indicator)
-prettyTable(result1_experiment %>% select(description, corelation))
+result3_experiment <- experiment %>% filter(corelation>0.9)
+result3_experiment$description<-mapply(translateIndicator, result3_experiment$indicator)
+prettyTable(result3_experiment %>% select(description, corelation))
+```
+# Przewidywanie cen złota
+```{r predykcja_cen_zlota_przygotowanie_danych}
+df_gold <- gp %>%
+  select(g_date,g_usd) %>% rename(Date=g_date)
+
+df_stonks <- spComposite %>% 
+  select(year, month, Dividend, CPI, Real.Earnings)%>%
+  mutate(year=as.integer(year), month=as.integer(month))
+
+#head(df_stonks)
+prettyTable(result1_experiment) #NY.GDP.MKTP.CD
+
+
+#colnames(wdi)
+df_wld <- wdi %>%
+  filter(countryCode=="WLD" & indicator=="NY.GDP.MKTP.CD") %>%
+  rename(GPDpc=developmentIndicators)%>%
+  select(GPDpc, year)
+
+
+df_cur_Australian.Dollar <- cer %>% filter(currency %in% c("Australian.Dollar"))%>%
+  rename(Australian.Dollar=value) %>% select(Date, Australian.Dollar)
+df_cur_Brunei.Dollar <- cer %>% filter(currency %in% c("Brunei.Dollar"))%>%
+  rename(Brunei.Dollar=value) %>% select(Date, Brunei.Dollar)
+df_cur <- merge(df_cur_Australian.Dollar, df_cur_Brunei.Dollar, by="Date")
+
+
+vanilla <- df_gold %>% inner_join((df_cur)) %>%
+  mutate(month =as.integer(format(Date, "%m")), year =as.integer( format(Date, "%Y")))%>%
+  inner_join(df_stonks, by = c("year" = "year", "month" = "month"))%>%
+  inner_join(df_wld, by=c("year"="year")) %>%select(-c(year, month))
+  
+  
+  
+summary(vanilla)
+count(vanilla)
+
+chocola <- vanilla %>% select(-c(Date))
+
 ```
 
+```{r predykcja_cen}
+set.seed(9)
+
+inTraining <- 
+    createDataPartition(
+        y = chocola$g_usd,
+        p = .75,
+        list = FALSE)
+
+training <- chocola[ inTraining,]
+testing  <- chocola[-inTraining,]
 
 
+fitControl <- trainControl(method = "repeatedcv",   
+                        number = 10,
+                        repeats = 10)
 
+model <- train(g_usd ~ .,
+               data = training,
+               method = "lm", 
+               trControl = fitControl)  
 
+model
+```
 
+```{r sprawdzanie_na_zbiorze_testowym}
+predictions <- predict(model, testing)
+postResample(pred = predictions, obs = testing$g_usd)
 
+tmp<- testing
+tmp$pred<-predictions
+tmp<-tmp%>%select(g_usd,pred)
+head(tmp)
+```
