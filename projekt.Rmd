@@ -125,7 +125,7 @@ Podsumowanie surowych danych.
 summary(goldPrice)
 
 ```
-Do dalszej analizy użyto cen złota podanej w dolarach, ponieważ miała ona najmniej nieustalonych wartości. Dane zostały zmodyfikowane, aby osiągnąć pojedynczą cenę złota na konkretny dzień. Wymagało to obliczania średniej z dwóch kolumn (ceny AM oraz PM, w przypadku braku  jednej z nich brana jest dostępna wartość).
+Do dalszej analizy użyto cen złota podanej w dolarach, ponieważ miała ona najmniej nieustalonych wartości. Dane zostały zmodyfikowane, aby osiągnąć pojedynczą cenę złota na konkretny dzień. Wymagało to obliczania średniej z dwóch kolumn (ceny AM oraz PM, w przypadku braku  jednej z nich brana była dostępna wartość).
 
 ```{r ceny_zlota_standaryzacja}
 gp<- goldPrice %>% 
@@ -161,8 +161,7 @@ gg<- ggplot(data=gp, aes(g_date)) +
 
 ggplotly(gg)
 ```
-
-Z powyższego wykresu można spostrzec, że ceny złota w różnych walutach zachowują się podobnie.
+Powyższy wykres ilustruje zmiany cen złota w latach 1968-2021. Można na nim zauważyć, że ceny złota w różnych walutach zachowują się podobnie. Jedyna waluta, która ma znacząco krótszy czas pomiaru to euro. Pierwszy pomiar cen odnotowano w 05/01/1999r. czyli cztery dni od oficjalnego wejścia do  obiegu owej waluty.
 
 ## Kursy walut
 
@@ -171,7 +170,7 @@ Poniżej znajduje się krótkie podsumowanie wczytanych kursów walut.
 ```{r kursy_wymiany_walut_podsumowanie}
 colnames(currencyExchangeRates)
 currencyExchangeRates<-currencyExchangeRates%>% mutate(Date=as.Date(Date,format="%Y-%m-%d"))
-nrow(currencyExchangeRates)
+currencyRowNumber<-nrow(currencyExchangeRates)
 summary(currencyExchangeRates)
 ```
 
@@ -184,7 +183,7 @@ cer <- currencyExchangeRates %>%
 
 summary(cer)
 ```
-Prezentacja wybranych wartości
+Zbiór kursów walut zawierał `r currencyRowNumber` pomiarów pomiędzy 1995 a 2018 rokiem. Dotyczył 51 różnych walut. Niestety prawie żadna nie była pozbawiona wartości nieznanych. Dane wymagały zmiany charakteru obserwacji. Poprzednio były to pomiary wszystkich walut w danym dniu, zmieniono to na pomiar jednej waluty w konkretnym dniu. Brakujące wartości zostały usunięte.
 
 ## Indeks giełdowy S&P
 
@@ -259,7 +258,7 @@ ggplotly(gg)
 
 ## Ceny złota a cena bitcoina
 
-W tym rozdziale badać będę korelację między cenami złota i kryptowaluty. Na poniższym wykresie można zobaczyć zależność ceny drogocennego metalu oraz Bitcoina. Jeżeli wartości byłyby w silnej korelacji, punkty na wykresie znajdowałyby się na przekątnych wykresu.  Można zobaczyć, że dopiero od 2017 roku warto badać tę zależność. Niestety korelacja w tych latach nie jest znacząca, najwyższą przypada na rok 2019 i wynosi około 0,7. W pozostałych latach ciężko odnaleźć zależność.
+W tym rozdziale badana będzie korelacja między cenami złota i kryptowaluty. Na poniższym wykresie można zobaczyć zależność ceny drogocennego metalu oraz Bitcoina. Jeżeli wartości byłyby w silnej korelacji, punkty na wykresie znajdowałyby się na jednej lub drugiej przekątnej wykresu.  Można zobaczyć, że dopiero od 2017 roku warto badać tę zależność. Niestety korelacja w tych latach nie jest znacząca, najwyższą przypada na rok 2019 i wynosi około 0,7. W pozostałych latach ciężko odnaleźć zależność.
 
 ```{r ceny_zlota_a_ceny_bitcona_interaktywny_wykres}
 df <- bchain_mkpru %>% left_join(gp,c("Date"="g_date")) %>%
@@ -313,7 +312,7 @@ ggplot(data=df2, aes(x=as.character(year), y=corel)) +
 
 ## Cena złota a waluty światowe
 
-W tej sekcji badano korelację ceny złota pomiędzy kursami walut. Poniżej znajduje się tabelka z wynikami wszystkich walut. Warto zauważyć, że nie można było wyznaczyć korelacji z walutami: Bahrain.Dinar, Qatar.Riyal, Rial.Omani oraz U.S..Dollar. Jest to spowodowane tym, że ich wartości każdego pomiaru są jednakowe.
+W tej sekcji badano korelację ceny złota pomiędzy kursami walut. Poniżej znajduje się tabelka z wynikami wszystkich walut. Warto zauważyć, że nie można było wyznaczyć korelacji z walutami: Bahrain.Dinar, Qatar.Riyal, Rial.Omani oraz U.S..Dollar. Jest to spowodowane tym, że ich wartość każdego pomiaru jest jednakowa.
 
 
 ```{r}
@@ -340,7 +339,7 @@ prettyTable(e)
 
 ## Cena złota a wskaźniki światowe
 
-W tym eksperymencie badana była korelacja między cenami złota oraz wskaźnikami światowymi. Wymagało to obliczenia średniej ceny złota dla poszczególnych lat ponieważ wskaźniki rejestrowane były dla poszczególnych lat. Postanowiłem również nie skupiać się na konkretnym kraju tylko na całości pomiarów. W praktyce oznaczało to wykorzystanie danych globalnych dla całego świata.
+W tym eksperymencie badana była korelacja między cenami złota oraz wskaźnikami światowymi. Wymagało to obliczenia średniej ceny złota dla poszczególnych lat ponieważ wskaźniki rejestrowane były dla poszczególnych lat. Postanowiono również nie skupiać się na konkretnym kraju tylko na całości pomiarów. W praktyce oznaczało to wykorzystanie danych globalnych dla całego świata.
 
 ```{r ceny_zlota_a_swiatowe_wskazniki}
 gpTmp <-gp %>% 
@@ -506,7 +505,7 @@ prettyTable(result3_experiment %>% select(description, corelation))
 
 ## Wybór i wizualizacja atrybutów
 
-W tej części skupiono się na przewidywaniu cen złota, ponieważ wartości tego zbiór posiadały większą korelację ze zbiorem kursów walut w porównaniu do cen kryptowaluty. W tym celu wykorzystano poniższe 
+W tej części skupiono się na przewidywaniu cen złota, ponieważ wartości tego zbiór posiadały większą korelację ze zbiorem kursów walut w porównaniu do cen kryptowaluty. W tym celu wykorzystano poniższe dane
 
 * cen spółek:
   + CPI
@@ -518,7 +517,8 @@ W tej części skupiono się na przewidywaniu cen złota, ponieważ wartości te
   + Australian.Dollar
   + Brunei.Dollar
   
-wskaźniki światowe: GDP (current US$)
+
+Ze zbioru wskaźników światowych Wykorzystano wskaźnik GDP (current US$). Jest to wskaźnik ekonomiczny, który można wykorzystać do przewidywania cen złota ([źródło](https://jii.pm-research.com/content/3/1/83)).
   
 ```{r wizualizacja_wybranych_atrybutow_GPD}
 df_wld <- wdi %>%
@@ -563,7 +563,7 @@ gg <- ggplot(data=df_stonks, aes(x=year,y=Real.Earnings)) +
 ggplotly(gg)
 
 ```
-Wizualizacja dwóch wybranych walut, które mają wysoki wskaźnik korelacji.
+Do utworzenia regresora wykorzystano dwie waluty Australian.Dollar oraz Brunei.Dollar. Dolar brunejski został wybrany, ponieważ charakteryzował się największą siłą korelacji. Dolar australijski natomiast również miał bardzo wysoką korelację. Nie wykorzystano natomiast rupii pakistańskich (Pakistani.Rupee) ani korony islandziej (Icelandic.Krona), ponieważ miały one więcej wartości nieustalonych.
 
 ```{r wizualizacja_wybranych_atrybutow_waluty}
 df_cur_Australian.Dollar <- cer %>% filter(currency %in% c("Australian.Dollar"))%>%
@@ -580,7 +580,7 @@ gg <- ggplot(data=df_cur, aes(Date)) +
 ggplotly(gg)
 ```
 
-W celu uzyskania tylko rekordów, które mają wszystkie dane zdecydowano się na łączenia typu inner join. Wiąże się to z wybraniem danych z lat 1998-2018, ponieważ właśnie z tych lat posiadamy dane odnośnie walut. 
+W celu uzyskania tylko rekordów, które mają wszystkie dane zdecydowano się na łączenia typu inner join. W poprzednich krokach pozbyto się wartości pustych albo je uzupełniono. W konsekwencji powstały zbiór nie będzie zawierał wartości nieznanych.  
 
 ```{r predykcja_cen_zlota_przygotowanie_danych}
 df_gold <- gp %>%
