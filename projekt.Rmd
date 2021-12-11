@@ -600,7 +600,7 @@ Sumarycznie powstało `r count(all_)` rekordów.
 ## Tworzenie modelu
 Jako model decyzyny wykorzystano Cubist.
 
-```{r predykcja_cen, cache=TRUE}
+```{r podział_zbioru}
 
 set.seed(9)
 
@@ -613,7 +613,24 @@ inTraining <-
 training <- all_together[ inTraining,]
 testing  <- all_together[-inTraining,]
 
+hist_tmp<-testing %>%
+  select(g_usd) %>%
+  mutate(type="testing") %>%
+  bind_rows(
+    training %>%
+    select(g_usd) %>%
+    mutate(type="training")
+  )
 
+ggplot(hist_tmp, aes(x=g_usd, fill=type)) +
+    geom_histogram( color="#ff008c", alpha=0.3, position = 'identity') +
+    xlab("cena złota")+
+    ylab("liczba obserwacji")
+```
+
+Na powyższym wykresie możemy zaobserwować, że rozkłady cen złota w zbiorze testowym jak i treningowym są zbliżone.
+
+```{r predykcja_cen, cache=TRUE}
 grid <- expand.grid(committees = c(1, 10, 50, 100), neighbors = c(0, 1, 5, 9))
 
 model <- train(g_usd ~ .,
