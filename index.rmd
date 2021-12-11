@@ -1,7 +1,7 @@
 ---
-title: "Zaawansowana Eksploracja Danych - Projekt"
+title: "Zaawansowana Eksploracja Danych - analiza cen złota"
 author: "Tomasz Chudziak"
-date: "14/11/2021"
+date: "`r Sys.Date()`"
 output: 
   html_document:
     toc: true
